@@ -133,18 +133,15 @@ fn adjust_rewards(learning: &mut Learning, trace: &Vec<Transition>, trace_probab
         recent_history_weight * recent_average + (1.0 - recent_history_weight) * trace_probability.log10().max(-300.0)
     };
 
-    // println!("Trace Probability : {:.4e}", trace_probability);
-    // println!("Trace Prob Log10  : {:.4e}", trace_probability.log10().max(-300.0));
-    // println!("Historical Average: {:.4e}", historical_average);
-
+    
     let improvement = if trace_probability == 0.0 {
-        -300.0
+        -100.0
     } else if historical_average == 0.0 {
         0.0
     } else {
-        (trace_probability.log10().max(-300.0) / historical_average).max(0.0)
+        (trace_probability.log10().max(-100.0) / historical_average).max(0.0)
     };
-
+    
     let trace_length_penalty = if learning.history.len() < 5 {
         0.0
     } else {
@@ -152,18 +149,21 @@ fn adjust_rewards(learning: &mut Learning, trace: &Vec<Transition>, trace_probab
         let penalty_factor = 0.005; // Adjust this factor to control the penalty strength
         penalty_factor * ((trace.len() as f64 - historical_trace_length) / historical_trace_length).max(0.0)
     };
-
+    
     let improvement = improvement - trace_length_penalty;
-
+    
+    // println!("Trace Probability : {:.4e}", trace_probability);
+    // println!("Trace Prob Log10  : {:.4e}", trace_probability.log10().max(-300.0));
+    // println!("Historical Average: {:.4e}", historical_average);
     // println!("Improvement: {:.4e}", improvement);
 
     for (transition, reward) in &mut learning.reward {
         let occurrence_count = trace.iter().filter(|&t| t == transition).count() as f64;
         if occurrence_count > 0.0 {
             if improvement > 0.0 {
-                *reward *= 1.0 + (0.001 * improvement * (occurrence_count.powf(0.65)));
+                *reward += (0.001 * improvement * (occurrence_count.powf(0.95)));
             } else {
-                *reward *= 1.0 + (-0.005 * improvement * (occurrence_count.powf(0.75)));
+                *reward += (0.001 * improvement * (occurrence_count.powf(0.85)));
             }
             // // keep giving preference to transitions in the dependency graph
             // if transition.in_dep_graph {
@@ -171,7 +171,7 @@ fn adjust_rewards(learning: &mut Learning, trace: &Vec<Transition>, trace_probab
             // }
         }
         if transition.in_dep_graph {
-            *reward *= 1.005;
+            *reward += 0.005;
         }
     }
     learning.history.push(trace_probability);
@@ -217,7 +217,7 @@ pub fn make_traces(transitions: Vec<Transition>, traces: u64) {
     println!("Generating {} traces...", traces);
     let mut learning = initialize_learning(transitions.clone());
     println!("Learning initialized.");
-    for _ in 0..traces {
+    for i in 0..traces {
         let trace = generate_trace(&learning);
         // println!("{}", trace.0.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(" "));
         let mut file = OpenOptions::new()
@@ -226,7 +226,9 @@ pub fn make_traces(transitions: Vec<Transition>, traces: u64) {
             .open("traces.txt")
             .unwrap();
         writeln!(file, "{}", trace.0.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(" ")).unwrap();
-        println!("Trace Probability: {:0.4e}", trace.1);
+        if traces < 1000 || i % 100 == 0 {
+            println!("Trace {:4} Probability: {:0.4e}", i, trace.1);
+        }
         adjust_rewards(&mut learning, &trace.0, trace.1);
         // println!("Trace: {:?}", trace.0);
     }
@@ -246,21 +248,25 @@ pub fn make_traces(transitions: Vec<Transition>, traces: u64) {
 
     chart.configure_mesh().draw().unwrap();
 
-    chart
-        .draw_series(LineSeries::new(
-            learning.history.iter().enumerate().map(|(i, &v)| (i, v.log10())),
-            &RED,
-        ))
-        .unwrap()
-        .label("Log Trace Probability")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + traces as i32, y)], &RED));
-
-    chart
-        .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
-        .draw()
-        .unwrap();
+    if learning.history.len() > 1000 {
+        chart
+            .draw_series(LineSeries::new(
+                learning.history.iter().enumerate().step_by((learning.history.len() / 100).max(1)).map(|(i, &v)| (i, v.log10())),
+                &RED,
+            ))
+            .unwrap()
+            .label("Log Trace Probability")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + traces as i32, y)], &RED));
+    } else {
+        chart
+            .draw_series(LineSeries::new(
+                learning.history.iter().enumerate().map(|(i, &v)| (i, v.log10())),
+                &RED,
+            ))
+            .unwrap()
+            .label("Log Trace Probability")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + traces as i32, y)], &RED));
+    }
 
     println!("Learning history saved to learning_history.png");
     println!("Traces saved to traces.txt");
