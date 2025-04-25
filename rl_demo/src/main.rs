@@ -22,14 +22,16 @@ fn main() {
     let dep_graph = model::make_8react_graph(transitions.clone());
     println!("Dependency Graph: {:?}", dep_graph);
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open("traces.txt")
-        .unwrap_or_else(|e| panic!("Failed to open file: {}", e));
-    let current_time = chrono::Local::now();
-    writeln!(file, "EXPERIMENTS AT {}", current_time).unwrap();
+    if num_traces < 100000 {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open("traces.txt")
+            .unwrap_or_else(|e| panic!("Failed to open file: {}", e));
+        let current_time = chrono::Local::now();
+        writeln!(file, "EXPERIMENTS AT {}", current_time).unwrap();
+    }
 
     traces::make_traces(transitions.clone(), num_traces.try_into().unwrap());
 }

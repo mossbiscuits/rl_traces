@@ -225,8 +225,10 @@ pub fn make_traces(transitions: Vec<Transition>, traces: u64) {
             .append(true)
             .open("traces.txt")
             .unwrap();
-        writeln!(file, "{}", trace.0.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(" ")).unwrap();
-        if traces < 1000 || i % if traces < 1000 {100} else {500} == 0 {
+        if traces < 100000 {
+            writeln!(file, "{}", trace.0.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(" ")).unwrap();
+        }
+        if traces < 1000 || i % if traces < 10000 {100} else {1000} == 0 {
             println!("Trace {:4} Probability: {:0.4e}", i, trace.1);
         }
         adjust_rewards(&mut learning, &trace.0, trace.1);
